@@ -413,10 +413,16 @@ class LikelihoodBasedPosterior(NeuralPosterior):
         with torch.set_grad_enabled(track_gradients):
             log_likelihood_trial_batch = net.log_prob(x_repeated, theta_repeated)
             # Reshape to (x-trials x parameters), sum over trial-log likelihoods.
-            log_likelihood_trial_sum = log_likelihood_trial_batch.reshape(
+            # Reshape to (parameters by x-trials) and sum over trials.
+            log_likelihood_trial_batch = log_likelihood_trial_batch.reshape(
                 x.shape[0], -1
+            )
+            # Lower bound for each trial and across parameters.
+            log_likelihood_trial_sum = torch.where(
+                log_likelihood_trial_batch >= ll_lower_bound,
+                log_likelihood_trial_batch,
+                ll_lower_bound * torch.ones_like(log_likelihood_trial_batch),
             ).sum(0)
-
         return log_likelihood_trial_sum
 
 
