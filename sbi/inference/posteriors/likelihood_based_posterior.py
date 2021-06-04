@@ -132,6 +132,7 @@ class LikelihoodBasedPosterior(NeuralPosterior):
         mcmc_method: Optional[str] = None,
         mcmc_parameters: Optional[Dict[str, Any]] = None,
         rejection_sampling_parameters: Optional[Dict[str, Any]] = None,
+        potential_fn_provider: Optional[Callable] = None,
     ) -> Tensor:
         r"""
         Return samples from posterior distribution $p(\theta|x)$ with MCMC.
@@ -177,7 +178,11 @@ class LikelihoodBasedPosterior(NeuralPosterior):
         sample_with = sample_with if sample_with is not None else self._sample_with
         x, num_samples = self._prepare_for_sample(x, sample_shape)
 
-        potential_fn_provider = PotentialFunctionProvider()
+        potential_fn_provider = (
+            PotentialFunctionProvider()
+            if potential_fn_provider is None
+            else potential_fn_provider
+        )
         if sample_with == "mcmc":
 
             mcmc_method, mcmc_parameters = self._potentially_replace_mcmc_parameters(
