@@ -513,11 +513,18 @@ class PotentialFunctionProvider:
         theta = self.transform.inv(transformed_theta)
         log_abs_det = self.transform.log_abs_det_jacobian(theta, transformed_theta)
 
+        theta = self.transforms.inv(theta_transformed)
+        ladj = self.transforms.log_abs_det_jacobian(theta, theta_transformed)
+        # Without transforms, logabsdet returns second dimension.
+        if ladj.ndim > 1:
+            ladj = ladj.sum(-1)
+
         log_likelihoods = LikelihoodBasedPosterior._log_likelihoods_over_trials(
             x=self.x,
             theta=theta,
             net=self.likelihood_nn,
             track_gradients=track_gradients,
+            ll_lower_bound=np.log(self.l_lower_bound),
         )
         posterior_potential = log_likelihoods + self.prior.log_prob(theta)
         posterior_potential_transformed = posterior_potential - log_abs_det
