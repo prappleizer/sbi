@@ -7,7 +7,11 @@ from warnings import warn
 
 import numpy as np
 import torch
+<<<<<<< HEAD
 import torch.distributions.transforms as torch_tf
+=======
+from pyro.distributions.transforms import identity_transform
+>>>>>>> 0291ffa (make transforms optional.)
 from torch import Tensor, nn
 
 from sbi.inference.posteriors.base_posterior import NeuralPosterior
