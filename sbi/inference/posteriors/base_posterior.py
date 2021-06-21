@@ -451,6 +451,7 @@ class NeuralPosterior(ABC):
         warmup_steps: int = 20,
         num_chains: Optional[int] = 1,
         show_progress_bars: bool = True,
+        num_init_workers: int = 1,
         **kwargs,
     ) -> Tensor:
         r"""
@@ -471,7 +472,9 @@ class NeuralPosterior(ABC):
             thin: Thinning factor for the chain, e.g. for `thin=3` only every third
                 sample will be returned, until a total of `num_samples`.
             warmup_steps: Initial number of samples to discard.
-            num_chains: Whether to sample in parallel. If None, use all but one CPU.
+            num_chains: Number of MCMC chains.
+            num_init_workers: Number of CPU workers for generating initial parameters
+                for each chain.
             show_progress_bars: Whether to show a progressbar during sampling.
             kwargs: Absorbs passed but unused arguments. E.g. in
                 `DirectPosterior.sample()` we pass `mcmc_parameters` which might
@@ -482,7 +485,9 @@ class NeuralPosterior(ABC):
             Tensor of shape (num_samples, shape_of_single_theta).
         """
 
-        initial_params = torch.cat([init_fn() for _ in range(num_chains)])
+        initial_params = self.get_mcmc_init_params(
+            init_fn, num_chains=num_chains, num_workers=num_init_workers
+        )
 
         track_gradients = mcmc_method in ("hmc", "nuts")
         with torch.set_grad_enabled(track_gradients):
@@ -1089,6 +1094,27 @@ class NeuralPosterior(ABC):
             warn(warning_description + warning_msg)
 
         self.__dict__ = state_dict
+
+    def get_mcmc_init_params(
+        self, init_fn: Callable, num_chains: int = 1, num_workers: int = 1
+    ) -> Tensor:
+        """Return MCMC initial parameters for each chain.
+
+        The parameters are obtained using `init_fn`.
+
+        Parallelizes across chains.
+
+        Args:
+            init_fn:
+            num_chains:
+            num_workers: number of CPUs to parallelize across
+
+        Returns:
+            Tensor contain the initial parameters, shape (num_chains, dim_parameters).
+        """
+        return torch.cat(
+            Parallel(n_jobs=num_workers)(delayed(init_fn)() for _ in range(num_chains))
+        )
 
 
 class ConditionalPotentialFunctionProvider:
