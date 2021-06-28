@@ -2,6 +2,8 @@
 # under the Affero General Public License v3, see <https://www.gnu.org/licenses/>.
 
 
+from functools import partial
+from typing import Optional
 from warnings import warn
 
 from pyknos.nflows import distributions as distributions_
@@ -151,6 +153,9 @@ def build_nsf(
     num_transforms: int = 5,
     num_bins: int = 10,
     embedding_net: nn.Module = nn.Identity(),
+    base_distribution: Optional[str] = "normal",
+    tail_bound: float = 3.0,
+    out_of_support_eps: float = 1e-10,
     **kwargs,
 ) -> nn.Module:
     """Builds NSF p(x|y).
@@ -174,69 +179,17 @@ def build_nsf(
     # Infer the output dimensionality of the embedding_net by making a forward pass.
     y_numel = embedding_net(batch_y[:1]).numel()
 
+    # If x is just a scalar then use a dummy mask and learn spline parameters using the
+    # conditioning variables only.
     if x_numel == 1:
 
-        class ContextSplineMap(nn.Module):
-            """
-            Neural network from `context` to the spline parameters.
+        # Define dummy mask because there is only one dimension.
+        def mask_in_layer(_):
+            return tensor([1], dtype=uint8)
 
-            We cannot use the resnet as conditioner to learn each dimension conditioned
-            on the other dimensions (because there is only one). Instead, we learn the
-            spline parameters directly. In the case of conditinal density estimation,
-            we make the spline parameters conditional on the context. This is
-            implemented in this class.
-            """
-
-            def __init__(
-                self,
-                in_features: int,
-                out_features: int,
-                hidden_features: int,
-                context_features: int,
-            ):
-                """
-                Initialize neural network that learns to predict spline parameters.
-
-                Args:
-                    in_features: Unused since there is no `conditioner` in 1D.
-                    out_features: Number of spline parameters.
-                    hidden_features: Number of hidden units.
-                    context_features: Number of context features.
-                """
-                super().__init__()
-                # `self.hidden_features` is only defined such that nflows can infer
-                # a scaling factor for initializations.
-                self.hidden_features = hidden_features
-
-                # Use a non-linearity because otherwise, there will be a linear
-                # mapping from context features onto distribution parameters.
-                self.spline_predictor = nn.Sequential(
-                    nn.Linear(context_features, self.hidden_features),
-                    nn.ReLU(),
-                    nn.Linear(self.hidden_features, self.hidden_features),
-                    nn.ReLU(),
-                    nn.Linear(self.hidden_features, out_features),
-                )
-
-            def __call__(
-                self, inputs: Tensor, context: Tensor, *args, **kwargs
-            ) -> Tensor:
-                """
-                Return parameters of the spline given the context.
-
-                Args:
-                    inputs: Unused. It would usually be the other dimensions, but in
-                        1D, there are no other dimensions.
-                    context: Context features.
-
-                Returns:
-                    Spline parameters.
-                """
-                return self.spline_predictor(context)
-
-        mask_in_layer = lambda i: tensor([1], dtype=uint8)
-        conditioner = lambda in_features, out_features: ContextSplineMap(
-            in_features, out_features, hidden_features, context_features=y_numel
+        # Conditioner ignores the data and uses the conditioning variables only.
+        conditioner = partial(
+            ContextSplineMap, hidden_features=hidden_features, context_features=y_numel
         )
         if num_transforms > 1:
             warn(
@@ -249,12 +202,13 @@ def build_nsf(
             )
 
     else:
-        mask_in_layer = lambda i: create_alternating_binary_mask(
-            features=x_numel, even=(i % 2 == 0)
-        )
-        conditioner = lambda in_features, out_features: nets.ResidualNet(
-            in_features=in_features,
-            out_features=out_features,
+        # Define mask function to alternate between predicted x-dimensions.
+        def mask_in_layer(i):
+            return create_alternating_binary_mask(features=x_numel, even=(i % 2 == 0))
+
+        # Use conditional resnet as spline conditioner.
+        conditioner = partial(
+            nets.ResidualNet,
             hidden_features=hidden_features,
             context_features=y_numel,
             num_blocks=2,
@@ -263,6 +217,7 @@ def build_nsf(
             use_batch_norm=False,
         )
 
+    # Stack spline transforms.
     transform = transforms.CompositeTransform(
         [
             transforms.CompositeTransform(
@@ -272,7 +227,7 @@ def build_nsf(
                         transform_net_create_fn=conditioner,
                         num_bins=num_bins,
                         tails="linear",
-                        tail_bound=3.0,
+                        tail_bound=tail_bound,
                         apply_unconditional_transform=False,
                     ),
                     transforms.LULinear(x_numel, identity_init=True),
@@ -282,6 +237,7 @@ def build_nsf(
         ]
     )
 
+    # Prepend zscores for x and theta.
     if z_score_x:
         transform_zx = standardizing_transform(batch_x)
         transform = transforms.CompositeTransform([transform_zx, transform])
@@ -289,7 +245,82 @@ def build_nsf(
     if z_score_y:
         embedding_net = nn.Sequential(standardizing_net(batch_y), embedding_net)
 
-    distribution = distributions_.StandardNormal((x_numel,))
+    if base_distribution == "normal":
+        distribution = distributions_.StandardNormal((x_numel,))
+    elif base_distribution == "lognormal":
+        distribution = distributions_.StandardLogNormal(
+            (x_numel,), out_of_support_eps=out_of_support_eps
+        )
+        # Add shift from tail bound to zero to ensure transformed data is in LogNormal
+        # support.
+        transform = transforms.CompositeTransform(
+            [
+                transform,
+                transforms.PointwiseAffineTransform(
+                    shift=tail_bound + out_of_support_eps
+                ),
+            ]
+        )
+    else:
+        ValueError(f"base dist {base_distribution} not implemented.")
+
     neural_net = flows.Flow(transform, distribution, embedding_net)
 
     return neural_net
+
+
+class ContextSplineMap(nn.Module):
+    """
+    Neural network from `context` to the spline parameters.
+
+    We cannot use the resnet as conditioner to learn each dimension conditioned
+    on the other dimensions (because there is only one). Instead, we learn the
+    spline parameters directly. In the case of conditinal density estimation,
+    we make the spline parameters conditional on the context. This is
+    implemented in this class.
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        hidden_features: int,
+        context_features: int,
+    ):
+        """
+        Initialize neural network that learns to predict spline parameters.
+
+        Args:
+            in_features: Unused since there is no `conditioner` in 1D.
+            out_features: Number of spline parameters.
+            hidden_features: Number of hidden units.
+            context_features: Number of context features.
+        """
+        super().__init__()
+        # `self.hidden_features` is only defined such that nflows can infer
+        # a scaling factor for initializations.
+        self.hidden_features = hidden_features
+
+        # Use a non-linearity because otherwise, there will be a linear
+        # mapping from context features onto distribution parameters.
+        self.spline_predictor = nn.Sequential(
+            nn.Linear(context_features, self.hidden_features),
+            nn.ReLU(),
+            nn.Linear(self.hidden_features, self.hidden_features),
+            nn.ReLU(),
+            nn.Linear(self.hidden_features, out_features),
+        )
+
+    def __call__(self, inputs: Tensor, context: Tensor, *args, **kwargs) -> Tensor:
+        """
+        Return parameters of the spline given the context.
+
+        Args:
+            inputs: Unused. It would usually be the other dimensions, but in
+                1D, there are no other dimensions.
+            context: Context features.
+
+        Returns:
+            Spline parameters.
+        """
+        return self.spline_predictor(context)
