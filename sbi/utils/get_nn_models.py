@@ -90,6 +90,10 @@ def likelihood_nn(
     num_bins: int = 10,
     embedding_net: nn.Module = nn.Identity(),
     num_components: int = 10,
+    base_distribution: str = "normal",
+    tail_bound: float = 3.0,
+    tail_bound_eps: float = 1e-10,
+    tails: str = "linear",
 ) -> Callable:
     r"""
     Returns a function that builds a density estimator for learning the likelihood.
@@ -146,7 +150,15 @@ def likelihood_nn(
         if model == "maf":
             return build_maf(batch_x=batch_x, batch_y=batch_theta, **kwargs)
         elif model == "nsf":
-            return build_nsf(batch_x=batch_x, batch_y=batch_theta, **kwargs)
+            return build_nsf(
+                batch_x=batch_x,
+                batch_y=batch_theta,
+                base_distribution=base_distribution,
+                tails=tails,
+                tail_bound=tail_bound,
+                tail_bound_eps=tail_bound_eps,
+                **kwargs,
+            )
         else:
             raise NotImplementedError
 
@@ -231,7 +243,7 @@ def posterior_nn(
                 batch_x=batch_theta,
                 batch_y=batch_x,
                 num_components=num_components,
-                **kwargs
+                **kwargs,
             )
 
     else:

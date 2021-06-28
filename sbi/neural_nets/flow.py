@@ -9,6 +9,7 @@ from warnings import warn
 from pyknos.nflows import distributions as distributions_
 from pyknos.nflows import flows, transforms
 from pyknos.nflows.nn import nets
+from pyknos.nflows.transforms import CompositeTransform, IdentityTransform
 from torch import Tensor, nn, relu, tanh, tensor, uint8
 
 from sbi.utils.sbiutils import standardizing_net, standardizing_transform
@@ -48,11 +49,11 @@ def build_made(
     if x_numel == 1:
         warn(f"In one-dimensional output space, this flow is limited to Gaussians")
 
-    transform = transforms.IdentityTransform()
+    transform = IdentityTransform()
 
     if z_score_x:
         transform_zx = standardizing_transform(batch_x)
-        transform = transforms.CompositeTransform([transform_zx, transform])
+        transform = CompositeTransform([transform_zx, transform])
 
     if z_score_y:
         embedding_net = nn.Sequential(standardizing_net(batch_y), embedding_net)
@@ -109,9 +110,9 @@ def build_maf(
     if x_numel == 1:
         warn(f"In one-dimensional output space, this flow is limited to Gaussians")
 
-    transform = transforms.CompositeTransform(
+    transform = CompositeTransform(
         [
-            transforms.CompositeTransform(
+            CompositeTransform(
                 [
                     transforms.MaskedAffineAutoregressiveTransform(
                         features=x_numel,
@@ -133,7 +134,7 @@ def build_maf(
 
     if z_score_x:
         transform_zx = standardizing_transform(batch_x)
-        transform = transforms.CompositeTransform([transform_zx, transform])
+        transform = CompositeTransform([transform_zx, transform])
 
     if z_score_y:
         embedding_net = nn.Sequential(standardizing_net(batch_y), embedding_net)
@@ -155,7 +156,8 @@ def build_nsf(
     embedding_net: nn.Module = nn.Identity(),
     base_distribution: Optional[str] = "normal",
     tail_bound: float = 3.0,
-    out_of_support_eps: float = 1e-10,
+    tail_bound_eps: float = 1e-10,
+    tails: str = "linear",
     **kwargs,
 ) -> nn.Module:
     """Builds NSF p(x|y).
@@ -209,29 +211,31 @@ def build_nsf(
         )
 
     # Stack spline transforms.
-    transform = transforms.CompositeTransform(
-        [
-            transforms.CompositeTransform(
-                [
-                    transforms.PiecewiseRationalQuadraticCouplingTransform(
-                        mask=mask_in_layer(i),
-                        transform_net_create_fn=conditioner,
-                        num_bins=num_bins,
-                        tails="linear",
-                        tail_bound=tail_bound,
-                        apply_unconditional_transform=False,
-                    ),
-                    transforms.LULinear(x_numel, identity_init=True),
-                ]
-            )
-            for i in range(num_transforms)
+    transform_list = []
+    for i in range(num_transforms):
+        # Add spline.
+        block = [
+            transforms.PiecewiseRationalQuadraticCouplingTransform(
+                mask=mask_in_layer(i),
+                transform_net_create_fn=conditioner,
+                num_bins=num_bins,
+                tails=tails,
+                tail_bound=tail_bound,
+                apply_unconditional_transform=False,
+            ),
         ]
-    )
+        # Add LU transform only for high D x. Permutation makes sense only for more than
+        # one feature.
+        if x_numel > 1:
+            block.append(
+                transforms.LULinear(x_numel, identity_init=True),
+            )
+        transform_list += block
 
     # Prepend zscores for x and theta.
     if z_score_x:
         transform_zx = standardizing_transform(batch_x)
-        transform = transforms.CompositeTransform([transform_zx, transform])
+        transform_list = [transform_zx] + transform_list
 
     if z_score_y:
         embedding_net = nn.Sequential(standardizing_net(batch_y), embedding_net)
@@ -239,22 +243,16 @@ def build_nsf(
     if base_distribution == "normal":
         distribution = distributions_.StandardNormal((x_numel,))
     elif base_distribution == "lognormal":
-        distribution = distributions_.StandardLogNormal(
-            (x_numel,), out_of_support_eps=out_of_support_eps
-        )
+        distribution = distributions_.StandardLogNormal((x_numel,))
         # Add shift from tail bound to zero to ensure transformed data is in LogNormal
         # support.
-        transform = transforms.CompositeTransform(
-            [
-                transform,
-                transforms.PointwiseAffineTransform(
-                    shift=tail_bound + out_of_support_eps
-                ),
-            ]
-        )
+        transform_list += [
+            transforms.PointwiseAffineTransform(shift=tail_bound + tail_bound_eps)
+        ]
     else:
         ValueError(f"base dist {base_distribution} not implemented.")
 
+    transform = CompositeTransform(transform_list)
     neural_net = flows.Flow(transform, distribution, embedding_net)
 
     return neural_net
