@@ -191,15 +191,6 @@ def build_nsf(
         conditioner = partial(
             ContextSplineMap, hidden_features=hidden_features, context_features=y_numel
         )
-        if num_transforms > 1:
-            warn(
-                f"You are using `num_transforms={num_transforms}`. When estimating a "
-                f"1D density, you will not get any performance increase by using "
-                f"multiple transforms with NSF. We recommend setting "
-                f"`num_transforms=1` for faster training (see also 'Change "
-                f"hyperparameters of density esitmators' here: "
-                f"https://www.mackelab.org/sbi/tutorial/04_density_estimators/)."
-            )
 
     else:
         # Define mask function to alternate between predicted x-dimensions.
