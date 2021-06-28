@@ -418,17 +418,26 @@ class LikelihoodBasedPosterior(NeuralPosterior):
             next(net.parameters()).device == x.device and x.device == theta.device
         ), f"device mismatch: net, x, theta: {next(net.parameters()).device}, {x.decive}, {theta.device}."
 
+        num_trials = x.shape[0]
+        num_parameters = theta.shape[0]
+
         # Calculate likelihood in one batch.
         with torch.set_grad_enabled(track_gradients):
             log_likelihood_trial_batch = net.log_prob(x_repeated, theta_repeated)
             # Reshape to (x-trials x parameters), sum over trial-log likelihoods.
             # Reshape to (parameters by x-trials) and sum over trials.
             log_likelihood_trial_batch = log_likelihood_trial_batch.reshape(
-                x.shape[0], -1
+                num_trials, num_parameters
             )
             # Lower bound for each trial and across parameters.
             log_likelihood_trial_sum = torch.where(
-                log_likelihood_trial_batch >= ll_lower_bound,
+                torch.logical_and(
+                    # Apply lower bound
+                    log_likelihood_trial_batch >= ll_lower_bound,
+                    # Set to lower bound value when rt<=tau.
+                    # rts need shape of ll_each_trial.
+                    abs(x).repeat(1, num_parameters) > theta[:, 3],
+                ),
                 log_likelihood_trial_batch,
                 ll_lower_bound * torch.ones_like(log_likelihood_trial_batch),
             ).sum(0)
