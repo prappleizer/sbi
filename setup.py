@@ -28,7 +28,7 @@ REQUIRED = [
     "matplotlib",
     "numpy",
     "pillow",
-    "pyknos>=0.14.2",
+    "pyknos @ git+https://github.com/mackelab/pyknos@bounded-nsf#egg=pyknos",
     "pyro-ppl>=1.3.1",
     "scikit-learn",
     "scipy",
