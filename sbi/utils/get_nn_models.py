@@ -94,6 +94,7 @@ def likelihood_nn(
     tail_bound: float = 3.0,
     tail_bound_eps: float = 1e-10,
     tails: str = "linear",
+    num_hidden_spline_context_layers: int = 1,
 ) -> Callable:
     r"""
     Returns a function that builds a density estimator for learning the likelihood.
@@ -157,6 +158,7 @@ def likelihood_nn(
                 tails=tails,
                 tail_bound=tail_bound,
                 tail_bound_eps=tail_bound_eps,
+                num_hidden_spline_context_layers=num_hidden_spline_context_layers,
                 **kwargs,
             )
         else:

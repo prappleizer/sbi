@@ -158,6 +158,7 @@ def build_nsf(
     tail_bound: float = 3.0,
     tail_bound_eps: float = 1e-10,
     tails: str = "linear",
+    num_hidden_spline_context_layers: int = 1,
     **kwargs,
 ) -> nn.Module:
     """Builds NSF p(x|y).
@@ -191,7 +192,10 @@ def build_nsf(
 
         # Conditioner ignores the data and uses the conditioning variables only.
         conditioner = partial(
-            ContextSplineMap, hidden_features=hidden_features, context_features=y_numel
+            ContextSplineMap,
+            hidden_features=hidden_features,
+            context_features=y_numel,
+            num_hidden_layers=num_hidden_spline_context_layers,
         )
 
     else:
@@ -275,6 +279,7 @@ class ContextSplineMap(nn.Module):
         out_features: int,
         hidden_features: int,
         context_features: int,
+        num_hidden_layers: int,
     ):
         """
         Initialize neural network that learns to predict spline parameters.
@@ -292,13 +297,15 @@ class ContextSplineMap(nn.Module):
 
         # Use a non-linearity because otherwise, there will be a linear
         # mapping from context features onto distribution parameters.
-        self.spline_predictor = nn.Sequential(
-            nn.Linear(context_features, self.hidden_features),
+        layer_list = [nn.Linear(context_features, hidden_features), nn.ReLU()]
+        # Add hidden layers. 
+        layer_list += [
+            nn.Linear(hidden_features, hidden_features),
             nn.ReLU(),
-            nn.Linear(self.hidden_features, self.hidden_features),
-            nn.ReLU(),
-            nn.Linear(self.hidden_features, out_features),
-        )
+        ] * num_hidden_layers
+        # Add output layer.
+        layer_list += [nn.Linear(hidden_features, out_features)]
+        self.spline_predictor = nn.Sequential(*layer_list)
 
     def __call__(self, inputs: Tensor, context: Tensor, *args, **kwargs) -> Tensor:
         """
