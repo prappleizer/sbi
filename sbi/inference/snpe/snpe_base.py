@@ -287,8 +287,8 @@ class PosteriorEstimator(NeuralInference, ABC):
                         theta_batch, x_batch, masks_batch, proposal, calibration_kernel
                     )
                 )
-
-                train_log_prob_sum += batch_loss.sum().item()
+                # Add negative loss to get log prob.
+                train_log_prob_sum -= batch_loss.sum().item()
 
                 batch_loss.backward()
                 if clip_max_norm is not None:
