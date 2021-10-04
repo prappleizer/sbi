@@ -59,6 +59,7 @@ class NeuralPosterior(ABC):
         self._purpose = ""
         self._x_shape = x_shape
         self._posterior_sampler = None
+        self.var_name = var_name
 
         # If the sampler interface (#573) is used, the user might have passed `x_o`
         # already to the potential function builder. If so, this `x_o` will be used
