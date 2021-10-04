@@ -142,6 +142,7 @@ class NeuralPosterior(ABC):
                 "Context `x` needed when a default has not been set."
                 "If you'd like to have a default, use the `.set_default_x()` method."
             )
+            self._posterior_sampler = None
         else:
             return self.default_x
 
