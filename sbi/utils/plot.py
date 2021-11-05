@@ -152,6 +152,8 @@ def pairplot(
     ticks: Union[List, torch.Tensor] = [],
     points_colors: List[str] = plt.rcParams["axes.prop_cycle"].by_key()["color"],
     warn_about_deprecation: bool = True,
+    fig=None,
+    axes=None,
     **kwargs
 ):
     """
@@ -341,10 +343,10 @@ def pairplot(
                             aspect="auto",
                         )
                     elif opts["upper"][n] == "contour":
-                        if opts["contour_offdiag"]["percentile"]:
-                            Z = probs2contours(Z, opts["contour_offdiag"]["levels"])
-                        else:
-                            Z = (Z - Z.min()) / (Z.max() - Z.min())
+                        # if opts["contour_offdiag"]["percentile"]:
+                        #     Z = probs2contours(Z, opts["contour_offdiag"]["levels"])
+                        # else:
+                        #     Z = (Z - Z.min()) / (Z.max() - Z.min())
                         h = plt.contour(
                             X,
                             Y,
@@ -378,7 +380,9 @@ def pairplot(
                 else:
                     pass
 
-    return _pairplot_scaffold(diag_func, upper_func, dim, limits, points, opts)
+    return _pairplot_scaffold(
+        diag_func, upper_func, dim, limits, points, opts, fig=fig, axes=axes
+    )
 
 
 def conditional_pairplot(
@@ -395,6 +399,8 @@ def conditional_pairplot(
     ticks: Union[List, torch.Tensor] = [],
     points_colors: List[str] = plt.rcParams["axes.prop_cycle"].by_key()["color"],
     warn_about_deprecation: bool = True,
+    fig=None,
+    axes=None,
     **kwargs
 ):
     r"""
@@ -524,10 +530,14 @@ def conditional_pairplot(
             aspect="auto",
         )
 
-    return _pairplot_scaffold(diag_func, upper_func, dim, limits, points, opts)
+    return _pairplot_scaffold(
+        diag_func, upper_func, dim, limits, points, opts, fig=fig, axes=axes
+    )
 
 
-def _pairplot_scaffold(diag_func, upper_func, dim, limits, points, opts):
+def _pairplot_scaffold(
+    diag_func, upper_func, dim, limits, points, opts, fig=None, axes=None
+):
     """
     Builds the scaffold for any function that plots parameters in a pairplot setting.
 
@@ -588,7 +598,10 @@ def _pairplot_scaffold(diag_func, upper_func, dim, limits, points, opts):
             raise NotImplementedError
         rows = cols = len(subset)
 
-    fig, axes = plt.subplots(rows, cols, figsize=opts["figsize"], **opts["subplots"])
+    if fig is None or axes is None:
+        fig, axes = plt.subplots(
+            rows, cols, figsize=opts["figsize"], **opts["subplots"]
+        )
     # Cast to ndarray in case of 1D subplots.
     axes = np.array(axes).reshape(rows, cols)
 

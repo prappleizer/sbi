@@ -32,6 +32,8 @@ def pairplot(
     labels: Optional[List[str]] = None,
     ticks: Union[List, torch.Tensor] = [],
     points_colors: List[str] = plt.rcParams["axes.prop_cycle"].by_key()["color"],
+    fig=None,
+    axes=None,
     **kwargs
 ):
     """
@@ -72,6 +74,8 @@ def pairplot(
         ticks=ticks,
         points_colors=points_colors,
         warn_about_deprecation=False,
+        fig=fig,
+        axes=axes,
         **kwargs,
     )
 
