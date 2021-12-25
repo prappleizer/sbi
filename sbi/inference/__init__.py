@@ -19,7 +19,9 @@ from sbi.inference.base import (  # noqa: F401
     infer,
     simulate_for_sbi,
 )
+from sbi.inference.snle.mnle import MNLE
 from sbi.inference.snle.snle_a import SNLE_A
+
 # Unimplemented: don't export
 from sbi.inference.snpe.snpe_a import SNPE_A
 from sbi.inference.snpe.snpe_b import SNPE_B

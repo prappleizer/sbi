@@ -11,6 +11,7 @@ from warnings import warn
 import numpy as np
 import torch
 import torch.distributions.transforms as torch_tf
+from joblib import Parallel, delayed
 from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.api import MCMC
 from torch import Tensor

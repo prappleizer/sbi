@@ -425,18 +425,8 @@ class LikelihoodBasedPosterior(NeuralPosterior):
             log_likelihood_trial_batch = log_likelihood_trial_batch.reshape(
                 num_trials, num_parameters
             )
-            # Lower bound for each trial and across parameters.
-            log_likelihood_trial_sum = torch.where(
-                torch.logical_and(
-                    # Apply lower bound
-                    log_likelihood_trial_batch >= ll_lower_bound,
-                    # Set to lower bound value when rt<=tau.
-                    # rts need shape of ll_each_trial.
-                    abs(x).repeat(1, num_parameters) > theta[:, 3],
-                ),
-                log_likelihood_trial_batch,
-                ll_lower_bound * torch.ones_like(log_likelihood_trial_batch),
-            ).sum(0)
+            # sum over iid trial, keep parameter dim.
+            log_likelihood_trial_sum = log_likelihood_trial_batch.sum(0)
         return log_likelihood_trial_sum
 
 
@@ -522,18 +512,11 @@ class PotentialFunctionProvider:
         theta = self.transform.inv(transformed_theta)
         log_abs_det = self.transform.log_abs_det_jacobian(theta, transformed_theta)
 
-        theta = self.transforms.inv(theta_transformed)
-        ladj = self.transforms.log_abs_det_jacobian(theta, theta_transformed)
-        # Without transforms, logabsdet returns second dimension.
-        if ladj.ndim > 1:
-            ladj = ladj.sum(-1)
-
         log_likelihoods = LikelihoodBasedPosterior._log_likelihoods_over_trials(
             x=self.x,
             theta=theta,
             net=self.likelihood_nn,
             track_gradients=track_gradients,
-            ll_lower_bound=np.log(self.l_lower_bound),
         )
         posterior_potential = log_likelihoods + self.prior.log_prob(theta)
         posterior_potential_transformed = posterior_potential - log_abs_det
