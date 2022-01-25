@@ -8,15 +8,23 @@ from torch import eye, zeros
 from torch.distributions import MultivariateNormal
 
 from sbi import utils as utils
-from sbi.inference import SNL, prepare_for_sbi, simulate_for_sbi
+from sbi.inference import (
+    MCMCPosterior,
+    SNL,
+    likelihood_estimator_based_potential,
+    prepare_for_sbi,
+    simulate_for_sbi,
+)
 from sbi.simulators.linear_gaussian import diagonal_linear_gaussian
 
 
-from sbi.mcmc import SliceSamplerVectorized, SliceSamplerSerial
+from sbi.samplers.mcmc import SliceSamplerVectorized, SliceSamplerSerial
 from pyro.infer.mcmc import MCMC
 
+
 @pytest.mark.parametrize(
-    "sampling_method", (
+    "sampling_method",
+    (
         "slice_np",
         "slice_np_vectorized",
         "slice",
@@ -47,14 +55,17 @@ def test_api_posterior_sampler_set(sampling_method: str, set_seed):
     theta, x = simulate_for_sbi(
         simulator, prior, num_simulations, simulation_batch_size=10
     )
-    _ = inference.append_simulations(theta, x).train(max_num_epochs=5)
-    posterior = inference.build_posterior(
-        sample_with="mcmc", mcmc_method=sampling_method
-    ).set_default_x(x_o)
+    estimator = inference.append_simulations(theta, x).train(max_num_epochs=5)
+    potential_fn, transform = likelihood_estimator_based_potential(
+        estimator, prior, x_o
+    )
+    posterior = MCMCPosterior(
+        potential_fn, theta_transform=transform, method=sampling_method, proposal=prior
+    )
 
     assert posterior.posterior_sampler is None
     posterior.sample(
-        sample_shape=(num_samples,num_chains),
+        sample_shape=(num_samples, num_chains),
         x=x_o,
         mcmc_parameters={
             "thin": 3,
