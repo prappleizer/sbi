@@ -248,7 +248,6 @@ class DirectPosterior(NeuralPosterior):
         save_best_every: int = 10,
         show_progress_bars: bool = False,
         force_update: bool = False,
-        warn_about_cached: bool = True,
     ) -> Tensor:
         r"""Returns the maximum-a-posteriori estimate (MAP).
 
@@ -266,7 +265,7 @@ class DirectPosterior(NeuralPosterior):
         in unbounded space and transform the result back into bounded space.
 
         Args:
-            x: Observed data at which to evaluate the MAP.
+            x: Deprecated - use `.set_default_x()` prior to `.map()`.
             num_iter: Number of optimization steps that the algorithm takes
                 to find the MAP.
             learning_rate: Learning rate of the optimizer.
@@ -287,8 +286,6 @@ class DirectPosterior(NeuralPosterior):
                 the posterior.
             force_update: Whether or not to re-calculate the MAP when x is unchanged and
                 have a cached value.
-            warn_about_cached: Whether or not to show warning that we are using the
-                stored value for the MAP.
             log_prob_kwargs: Will be empty for SNLE and SNRE. Will contain
                 {'norm_posterior': True} for SNPE.
 
@@ -305,5 +302,4 @@ class DirectPosterior(NeuralPosterior):
             save_best_every=save_best_every,
             show_progress_bars=show_progress_bars,
             force_update=force_update,
-            warn_about_cached=warn_about_cached,
         )
