@@ -12,6 +12,7 @@ from pyro.infer.mcmc import HMC, NUTS
 from pyro.infer.mcmc.api import MCMC
 from torch import Tensor
 from torch import multiprocessing as mp
+from tqdm import tqdm
 
 from sbi import utils as utils
 from sbi.inference.posteriors.base_posterior import NeuralPosterior
@@ -235,7 +236,14 @@ class MCMCPosterior(NeuralPosterior):
             init_strategy=init_strategy,  # type: ignore
         )
         initial_params = torch.cat(
-            [init_fn() for _ in range(num_chains)]  # type: ignore
+            [
+                init_fn()
+                for _ in tqdm(
+                    range(num_chains),  # type: ignore
+                    desc=f"MCMC init with {init_strategy}",
+                    disable=not show_progress_bars,
+                )
+            ]
         )
 
         num_samples = torch.Size(sample_shape).numel()
