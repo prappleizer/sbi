@@ -130,7 +130,7 @@ def _log_likelihoods_over_trials(
 
     # Calculate likelihood in one batch.
     with torch.set_grad_enabled(track_gradients):
-        log_likelihood_trial_batch = net.log_prob(x_repeated, theta_repeated)
+        log_likelihood_trial_batch = net.log_prob(theta_repeated, x_repeated)
         # Reshape to (x-trials x parameters), sum over trial-log likelihoods.
         log_likelihood_trial_sum = log_likelihood_trial_batch.reshape(
             x.shape[0], -1
