@@ -150,13 +150,13 @@ def likelihood_nn(
 
     def build_fn(batch_theta, batch_x):
         if model == "mdn":
-            return build_mdn(batch_x=batch_x, batch_y=batch_theta, **kwargs)
+            return build_mdn(batch_x=batch_theta, batch_y=batch_x, **kwargs)
         if model == "made":
-            return build_made(batch_x=batch_x, batch_y=batch_theta, **kwargs)
+            return build_made(batch_x=batch_theta, batch_y=batch_x, **kwargs)
         if model == "maf":
-            return build_maf(batch_x=batch_x, batch_y=batch_theta, **kwargs)
+            return build_maf(batch_x=batch_theta, batch_y=batch_x, **kwargs)
         elif model == "nsf":
-            return build_nsf(batch_x=batch_x, batch_y=batch_theta, **kwargs)
+            return build_nsf(batch_x=batch_theta, batch_y=batch_x, **kwargs)
         else:
             raise NotImplementedError
 

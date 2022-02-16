@@ -367,4 +367,4 @@ class LikelihoodEstimator(NeuralInference, ABC):
         Returns:
             Negative log prob.
         """
-        return -self._neural_net.log_prob(x, context=theta)
+        return -self._neural_net.log_prob(theta, context=x)
